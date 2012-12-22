@@ -514,6 +514,8 @@ static int device_resume_early(struct device *dev, pm_message_t state)
 	error = dpm_run_callback(callback, dev, state, info);
 
 	TRACE_RESUME(error);
+
+	pm_runtime_enable(dev);
 	return error;
 }
 
@@ -586,8 +588,6 @@ static int device_resume(struct device *dev, pm_message_t state, bool async)
 
 	if (!dev->power.is_suspended)
 		goto Unlock;
-
-	pm_runtime_enable(dev);
 
 	if (dev->pm_domain) {
 		info = "power domain ";
@@ -943,6 +943,8 @@ static int device_suspend_late(struct device *dev, pm_message_t state)
 	pm_callback_t callback = NULL;
 	char *info = NULL;
 
+	__pm_runtime_disable(dev, false);
+
 	if (dev->pm_domain) {
 		info = "late power domain ";
 		callback = pm_late_early_op(&dev->pm_domain->ops, state);
@@ -1153,11 +1155,8 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 
  Complete:
 	complete_all(&dev->power.completion);
-
 	if (error)
 		async_error = error;
-	else if (dev->power.is_suspended)
-		__pm_runtime_disable(dev, false);
 
 	return error;
 }
