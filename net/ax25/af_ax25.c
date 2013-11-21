@@ -1643,11 +1643,11 @@ static int ax25_recvmsg(struct kiocb *iocb, struct socket *sock,
 
 	skb_copy_datagram_iovec(skb, 0, msg->msg_iov, copied);
 
-	if (msg->msg_namelen != 0) {
-		struct sockaddr_ax25 *sax = (struct sockaddr_ax25 *)msg->msg_name;
+	if (msg->msg_name) {
 		ax25_digi digi;
 		ax25_address src;
 		const unsigned char *mac = skb_mac_header(skb);
+		struct sockaddr_ax25 *sax = msg->msg_name;
 
 		ax25_addr_parse(mac + 1, skb->data - mac - 1, &src, NULL,
 				&digi, NULL, NULL);
