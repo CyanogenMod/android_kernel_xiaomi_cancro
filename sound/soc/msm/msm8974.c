@@ -96,7 +96,7 @@ static void *lpaif_quat_muxsel_virt_addr;
 
 static void *adsp_state_notifier;
 
-#define ADSP_STATE_READY_TIMEOUT_MS 3000
+#define ADSP_STATE_READY_TIMEOUT_MS 50
 
 static int quat_mi2s_sample_rate = SAMPLING_RATE_48KHZ;
 
