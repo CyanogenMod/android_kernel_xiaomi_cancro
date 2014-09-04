@@ -521,6 +521,8 @@ enum mdss_mpd_intf_index {
 #define MDSS_MDP_PANEL_FORMAT_RGB888			0x213F
 #define MDSS_MDP_PANEL_FORMAT_RGB666			0x212A
 
+#define MDSS_MDP_PANEL_FORMAT_PACK_ALIGN_MSB		BIT(7)
+
 enum mdss_mdp_pingpong_index {
 	MDSS_MDP_PINGPONG0,
 	MDSS_MDP_PINGPONG1,
