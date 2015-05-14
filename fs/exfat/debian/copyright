@@ -1,0 +1,16 @@
+This package was debianized by Eugene San (eugenesan) <eugenesan@gmail.com>  on  Mon, 29 Jul 2013 08:00:00 +0300
+
+Upstream Author(s): 
+	Samsung Corporation, http://www.samsung.com
+
+Downloaded from:
+	http://opensource.samsung.com/ :: exfat_1.2.4.zip
+
+Copyright:
+	Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
+
+License:
+	GPLv2
+
+The Debian packaging is (C) 2013, Canonical Ltd and is licensed
+under the GPL 2 or later, see `/usr/share/common-licenses/GPL-2'.

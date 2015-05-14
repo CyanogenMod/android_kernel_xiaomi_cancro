@@ -1,0 +1,16 @@
+Source: exfat
+Section: admin
+Priority: optional
+Maintainer: Eugene San (eugenesan) <eugenesan@gmail.com>
+Standards-Version: 3.9.1
+Build-Depends: debhelper (>= 7.0.50~), dh-modaliases
+
+Package: exfat-kernel-source
+Architecture: all
+Depends: ${misc:Depends}, dkms, linux-libc-dev, libc6-dev
+XB-Modaliases: ${modaliases}
+Recommends: exfat-utils
+Conflicts: exfat-modaliases
+Replaces: exfat-modaliases, exfat-fuse
+Description: exFAT & FAT12/16/32 File System driver source
+ This package contains exFAT & FAT12/16/32 File System driver source.

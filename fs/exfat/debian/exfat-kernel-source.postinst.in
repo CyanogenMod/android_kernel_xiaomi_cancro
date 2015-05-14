@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+# Copyright (C) 2002-2005 Flavio Stanchina
+# Copyright (C) 2005-2006 Aric Cyr
+# Copyright (C) 2007 Mario Limonciello
+# Copyright (C) 2009 Alberto Milone
+
+CVERSION=`dpkg-query -W -f='${Version}' #DRIVER_NAME#-kernel-source | awk -F "-" '{print $1}' | cut -d\: -f2`
+MODULES_DIR=$(ls /lib/modules/)
+CURRENT_KERNEL=$(uname -r)
+PACKAGE_NAME=#DRIVER_NAME#
+
+ARCH=`dpkg --print-architecture`
+
+case "$1" in
+	configure)
+	# Build the kernel module
+	/usr/lib/dkms/common.postinst $PACKAGE_NAME $CVERSION /usr/share/$PACKAGE_NAME $ARCH $2
+
+	# Update initramfs
+	update-initramfs -u
+	;;
+esac
+
+#DEBHELPER#

@@ -1,0 +1,5 @@
+README.md		usr/src/#DRIVER_NAME#-#VERSION#/
+*.c			usr/src/#DRIVER_NAME#-#VERSION#/
+*.h			usr/src/#DRIVER_NAME#-#VERSION#/
+Makefile		usr/src/#DRIVER_NAME#-#VERSION#/
+debian/dkms.conf	usr/src/#DRIVER_NAME#-#VERSION#/

@@ -1,0 +1,43 @@
+#!/usr/bin/make -f
+
+DRIVER_NAME := exfat
+VERSION := $(shell dpkg-parsechangelog | grep '^Version:' | cut -d' ' -f2 | cut -d- -f1 | cut -d\: -f2)
+PKG_kernel_src  := exfat-kernel-source
+ARCH := $(shell dpkg --print-architecture)
+ifeq ($(ARCH),amd64)
+ARCH_SUFFIX=x86_64
+else
+ARCH_SUFFIX=i386
+endif
+
+%:
+	dh "$@"
+
+# we don't actually build/clean the source here, it's dkms
+override_dh_auto_clean:
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+	# just create .install files from templates.
+	for i in dkms.conf \
+		$(PKG_kernel_src).install \
+		$(PKG_kernel_src).postinst \
+		$(PKG_kernel_src).prerm; do \
+			sed \
+			-e "s|#DRIVER_NAME#|$(DRIVER_NAME)|" \
+			-e "s|#VERSION#|$(VERSION)|" \
+			-e "s|#ARCH#|$(ARCH_SUFFIX)|" \
+			debian/$$i.in > debian/$$i; \
+	done
+
+override_dh_clean:
+	dh_clean
+
+	for i in dkms.conf \
+		$(PKG_kernel_src).install \
+		$(PKG_kernel_src).postinst \
+		$(PKG_kernel_src).prerm \
+		$(PKG_kernel_src); do \
+			rm -f debian/$$i; \
+	done

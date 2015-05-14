@@ -19,8 +19,8 @@
 /************************************************************************/
 /*                                                                      */
 /*  PROJECT : exFAT & FAT12/16/32 File System                           */
-/*  FILE    : exfat_data.c                                              */
-/*  PURPOSE : exFAT Configuable Data Definitions                        */
+/*  FILE    : exfat_global.c                                            */
+/*  PURPOSE : exFAT Miscellaneous Functions                             */
 /*                                                                      */
 /*----------------------------------------------------------------------*/
 /*  NOTES                                                               */
@@ -33,37 +33,31 @@
 /************************************************************************/
 
 #include "exfat_config.h"
-#include "exfat_data.h"
-#include "exfat_oal.h"
-
-#include "exfat_blkdev.h"
-#include "exfat_cache.h"
-#include "exfat_nls.h"
-#include "exfat_super.h"
-#include "exfat_core.h"
-
-/*======================================================================*/
-/*                                                                      */
-/*                    GLOBAL VARIABLE DEFINITIONS                       */
-/*                                                                      */
-/*======================================================================*/
+#include "exfat_bitmap.h"
 
 /*----------------------------------------------------------------------*/
-/*  File Manager                                                        */
+/*  Bitmap Manipulation Functions                                       */
 /*----------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------*/
-/*  Buffer Manager                                                      */
-/*----------------------------------------------------------------------*/
+#define BITMAP_LOC(v)           ((v) >> 3)
+#define BITMAP_SHIFT(v)         ((v) & 0x07)
 
-/* FAT cache */
-DEFINE_SEMAPHORE(f_sem);
-BUF_CACHE_T FAT_cache_array[FAT_CACHE_SIZE];
-BUF_CACHE_T FAT_cache_lru_list;
-BUF_CACHE_T FAT_cache_hash_list[FAT_CACHE_HASH_SIZE];
+s32 exfat_bitmap_test(u8 *bitmap, int i)
+{
+	u8 data;
 
-/* buf cache */
-DEFINE_SEMAPHORE(b_sem);
-BUF_CACHE_T buf_cache_array[BUF_CACHE_SIZE];
-BUF_CACHE_T buf_cache_lru_list;
-BUF_CACHE_T buf_cache_hash_list[BUF_CACHE_HASH_SIZE];
+	data = bitmap[BITMAP_LOC(i)];
+	if ((data >> BITMAP_SHIFT(i)) & 0x01)
+		return 1;
+	return 0;
+} /* end of Bitmap_test */
+
+void exfat_bitmap_set(u8 *bitmap, int i)
+{
+	bitmap[BITMAP_LOC(i)] |= (0x01 << BITMAP_SHIFT(i));
+} /* end of Bitmap_set */
+
+void exfat_bitmap_clear(u8 *bitmap, int i)
+{
+	bitmap[BITMAP_LOC(i)] &= ~(0x01 << BITMAP_SHIFT(i));
+} /* end of Bitmap_clear */

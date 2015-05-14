@@ -19,8 +19,8 @@
 /************************************************************************/
 /*                                                                      */
 /*  PROJECT : exFAT & FAT12/16/32 File System                           */
-/*  FILE    : exfat_data.c                                              */
-/*  PURPOSE : exFAT Configuable Data Definitions                        */
+/*  FILE    : exfat_global.h                                            */
+/*  PURPOSE : Header File for exFAT Global Definitions & Misc Functions */
 /*                                                                      */
 /*----------------------------------------------------------------------*/
 /*  NOTES                                                               */
@@ -32,38 +32,24 @@
 /*                                                                      */
 /************************************************************************/
 
-#include "exfat_config.h"
-#include "exfat_data.h"
-#include "exfat_oal.h"
+#ifndef _EXFAT_BITMAP_H
+#define _EXFAT_BITMAP_H
 
-#include "exfat_blkdev.h"
-#include "exfat_cache.h"
-#include "exfat_nls.h"
-#include "exfat_super.h"
-#include "exfat_core.h"
+#include <linux/types.h>
 
 /*======================================================================*/
 /*                                                                      */
-/*                    GLOBAL VARIABLE DEFINITIONS                       */
+/*       LIBRARY FUNCTION DECLARATIONS -- OTHER UTILITY FUNCTIONS       */
+/*                    (DO NOT CHANGE THIS PART !!)                      */
 /*                                                                      */
 /*======================================================================*/
 
 /*----------------------------------------------------------------------*/
-/*  File Manager                                                        */
+/*  Bitmap Manipulation Functions                                       */
 /*----------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------*/
-/*  Buffer Manager                                                      */
-/*----------------------------------------------------------------------*/
+s32	exfat_bitmap_test(u8 *bitmap, int i);
+void	exfat_bitmap_set(u8 *bitmap, int i);
+void	exfat_bitmap_clear(u8 *bitmpa, int i);
 
-/* FAT cache */
-DEFINE_SEMAPHORE(f_sem);
-BUF_CACHE_T FAT_cache_array[FAT_CACHE_SIZE];
-BUF_CACHE_T FAT_cache_lru_list;
-BUF_CACHE_T FAT_cache_hash_list[FAT_CACHE_HASH_SIZE];
-
-/* buf cache */
-DEFINE_SEMAPHORE(b_sem);
-BUF_CACHE_T buf_cache_array[BUF_CACHE_SIZE];
-BUF_CACHE_T buf_cache_lru_list;
-BUF_CACHE_T buf_cache_hash_list[BUF_CACHE_HASH_SIZE];
+#endif /* _EXFAT_BITMAP_H */

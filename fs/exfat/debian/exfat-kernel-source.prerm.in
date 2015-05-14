@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+# Copyright (C) 2002-2005 Flavio Stanchina
+# Copyright (C) 2005-2006 Aric Cyr
+# Copyright (C) 2007-2008 Mario Limonciello
+# Copyright (C) 2009 Alberto Milone
+
+#DEBHELPER#
+
+CVERSION=`dpkg-query -W -f='${Version}' #DRIVER_NAME#-kernel-source | awk -F "-" '{print $1}' | cut -d\: -f2`
+case "$1" in
+    remove|upgrade)
+		echo "Removing all DKMS Modules"
+		dkms remove -m #DRIVER_NAME# -v $CVERSION --all > /dev/null || true
+		echo "Done."
+        ;;
+esac
+
+#DEBHELPER#
