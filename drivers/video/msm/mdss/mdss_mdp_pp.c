@@ -2296,13 +2296,6 @@ static void pcc_combine(struct mdp_pcc_cfg_data *raw,
 		real->ops = u_ops;
 	else
 		real->ops = MDP_PP_OPS_DISABLE;
-
-	pr_debug("%s: raw:\n", __func__);
-	pp_print_pcc_cfg_data(raw, 0);
-	pr_debug("%s: user:\n", __func__);
-	pp_print_pcc_cfg_data(user, 0);
-	pr_debug("%s: real:\n", __func__);
-	pp_print_pcc_cfg_data(real, 0);
 }
 
 int mdss_mdp_user_pcc_config(struct mdp_pcc_cfg_data *config)
@@ -2336,6 +2329,7 @@ int mdss_mdp_user_pcc_config(struct mdp_pcc_cfg_data *config)
 	mutex_unlock(&mdss_pp_mutex);
 	return ret;
 }
+
 
 int mdss_mdp_pcc_config(struct mdp_pcc_cfg_data *config,
 					u32 *copyback)
