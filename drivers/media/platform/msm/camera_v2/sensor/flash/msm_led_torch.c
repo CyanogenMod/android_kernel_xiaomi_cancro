@@ -43,7 +43,7 @@ static enum led_brightness msm_led_torch_brightness_get(struct led_classdev *led
 }
 
 static struct led_classdev msm_torch_led = {
-	.name			= "flashlight",
+	.name			= "torch-light",
 	.brightness_set	= msm_led_torch_brightness_set,
 	.brightness_get	= msm_led_torch_brightness_get,
 	.brightness		= LED_OFF,
