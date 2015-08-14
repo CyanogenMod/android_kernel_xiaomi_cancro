@@ -1262,6 +1262,12 @@
 		qcom,master-id = <86>;
 	};
 
+	qcom,msm-thermal-simple {
+ 		compatible = "qcom,msm-thermal-simple";
+ 		qcom,thermal-vadc = <&pm8941_vadc>;
+ 		qcom,adc-channel = <178>;
+ 	};
+
 	qcom,bam_dmux@fc834000 {
 		compatible = "qcom,bam_dmux";
 		reg = <0xfc834000 0x7000>;
