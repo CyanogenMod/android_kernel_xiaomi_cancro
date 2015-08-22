@@ -170,58 +170,58 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 static int mdss_dsi_request_pongpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	int rc = 0;
+	int rc;
 
 	if (ctrl_pdata->panel_incell) {
 		if (gpio_is_valid(ctrl_pdata->tpldo_gpio)) {
 			rc = gpio_request(ctrl_pdata->tpldo_gpio, "tpldo_gpio");
-			if (rc)
+			if (rc && rc != -EBUSY)
 				pr_err("request tpldo gpio failed, rc=%d\n", rc);
 		}
 		if (gpio_is_valid(ctrl_pdata->tpwdn_gpio)) {
 			rc += gpio_request(ctrl_pdata->tpwdn_gpio, "tpwdn_gpio");
-			if (rc)
+			if (rc && rc != -EBUSY)
 				pr_err("request tpwdn gpio failed, rc=%d\n", rc);
 		}
 		if (gpio_is_valid(ctrl_pdata->vddio_gpio)) {
 			rc += gpio_request(ctrl_pdata->vddio_gpio, "vddio_gpio");
-			if (rc)
+			if (rc && rc != -EBUSY)
 				pr_err("request vddio gpio failed, rc=%d\n", rc);
 		}
 	}
 
-	return rc;
+	return 0;
 }
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	int rc = 0;
+	int rc;
 
 	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->disp_en_gpio,
 						"disp_enable");
-		if (rc) {
+		if (rc && rc != -EBUSY) {
 			pr_err("request disp_en gpio failed, rc=%d\n",
 				       rc);
 			goto disp_en_gpio_err;
 		}
 	}
 	rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
-	if (rc) {
+	if (rc && rc != -EBUSY) {
 		pr_err("request reset gpio failed, rc=%d\n",
 			rc);
 		goto rst_gpio_err;
 	}
 	if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
 		rc = gpio_request(ctrl_pdata->mode_gpio, "panel_mode");
-		if (rc) {
+		if (rc && rc != -EBUSY) {
 			pr_err("request panel mode gpio failed,rc=%d\n",
 								rc);
 			goto mode_gpio_err;
 		}
 	}
 
-	return rc;
+	return 0;
 
 mode_gpio_err:
 	gpio_free(ctrl_pdata->rst_gpio);
