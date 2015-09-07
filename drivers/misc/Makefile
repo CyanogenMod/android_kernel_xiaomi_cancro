@@ -72,3 +72,4 @@ obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
 obj-$(CONFIG_QPNP_MISC) += qpnp-misc.o
 obj-$(CONFIG_STM32_FW_UPDATER) += stm32fwu.o
 stm32fwu-objs := stm32-fwu-i2c.o stm32-bootloader.o
+obj-$(CONFIG_UID_CPUTIME) 	+= uid_cputime.o
