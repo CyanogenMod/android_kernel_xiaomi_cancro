@@ -623,6 +623,7 @@ struct mxt_data {
 	u8 lockdown_info[MXT_LOCKDOWN_SIZE];
 	u8 userdata_info[MXT_USERDATA_SIZE];
 	bool firmware_updated;
+	bool keys_off;
 
 	/* Slowscan parameters	*/
 	int slowscan_enabled;
@@ -1359,6 +1360,9 @@ static void mxt_proc_t15_messages(struct mxt_data *data, u8 *msg)
 	bool sync = false;
 	unsigned long keystates = le32_to_cpu(msg[2]);
 	int index = data->current_index;
+	if(data->keys_off) {
+		return;
+	}
 
 	for (key = 0; key < pdata->config_array[index].key_num; key++) {
 		curr_state = test_bit(key, &data->keystatus);
@@ -3334,6 +3338,36 @@ static ssize_t mxt_update_fw_store(struct device *dev,
 	return mxt_update_firmware(dev, attr, buf, count, NULL);
 }
 
+static ssize_t mxt_keys_off_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int count;
+	char c;
+
+	c = data->keys_off ? '1' : '0';
+	count = sprintf(buf, "%c\n", c);
+
+	return count;
+}
+
+static ssize_t mxt_keys_off_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->keys_off = (i == 1);
+
+		dev_dbg(dev, "%s\n", i ? "hw keys off" : "hw keys on");
+		return count;
+	} else {
+		dev_dbg(dev, "keys_off write error\n");
+		return -EINVAL;
+	}
+}
+
 static ssize_t mxt_version_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -4415,6 +4449,8 @@ static ssize_t mxt_mem_access_write(struct file *filp, struct kobject *kobj,
 static DEVICE_ATTR(update_fw, S_IWUSR | S_IRUSR, mxt_update_fw_show, mxt_update_fw_store);
 static DEVICE_ATTR(debug_enable, S_IWUSR | S_IRUSR, mxt_debug_enable_show,
 			mxt_debug_enable_store);
+static DEVICE_ATTR(keys_off, S_IWUSR | S_IRUSR, mxt_keys_off_show,
+			mxt_keys_off_store);
 static DEVICE_ATTR(pause_driver, S_IWUSR | S_IRUSR, mxt_pause_show,
 			mxt_pause_store);
 static DEVICE_ATTR(version, S_IRUGO, mxt_version_show, NULL);
@@ -4439,6 +4475,7 @@ static struct attribute *mxt_attrs[] = {
 	&dev_attr_debug_enable.attr,
 	&dev_attr_pause_driver.attr,
 	&dev_attr_version.attr,
+	&dev_attr_keys_off.attr,
 	&dev_attr_build.attr,
 	&dev_attr_slowscan_enable.attr,
 	&dev_attr_self_tune.attr,
@@ -5652,4 +5689,3 @@ module_exit(mxt_exit);
 MODULE_AUTHOR("Lionel Zhang <zhangbo_a@xiaomi.com>");
 MODULE_DESCRIPTION("Atmel maXTouch Touchscreen driver");
 MODULE_LICENSE("GPL");
-
