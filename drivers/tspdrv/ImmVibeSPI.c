@@ -837,7 +837,11 @@ static void vibrator_enable(struct timed_output_dev *dev, int value)
 			/* Only change the mode if not already in RTP mode; RTP input already set at init */
 			if (mode != MODE_REAL_TIME_PLAYBACK) {
 				drv2604_change_mode(MODE_REAL_TIME_PLAYBACK);
-				drv2604_set_rtp_val(vibe_strength);
+				if (get_hw_version_major() == 4 || get_hw_version_major() == 5) {
+					drv2604_set_rtp_val(REAL_TIME_PLAYBACK_CALIBRATION_STRENGTH);
+				} else {
+					drv2604_set_rtp_val(vibe_strength);
+				}
 				vibrator_is_playing = YES;
 				g_bAmpEnabled = true;
 			}
