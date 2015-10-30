@@ -170,7 +170,7 @@
 		qcom,csiphy-sd-index = <2>;
 		qcom,csid-sd-index = <2>;
 		qcom,led-flash-src = <&led_flash0>;
-		qcom,mount-angle = <270>;
+		qcom,mount-angle = <90>;
 		qcom,sensor-name = "s5k3m2";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
 		qcom,cam-vreg-type = <0 1 0 0>;
