@@ -28,6 +28,12 @@ static struct msm_sensor_power_setting s5k3m2_power_setting[] = {
 	},
 	{
 		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_RESET,
+		.config_val = GPIO_OUT_LOW,
+		.delay = 1,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_IMG_EN,
 		.config_val = GPIO_OUT_HIGH,
 		.delay = 1,
@@ -38,7 +44,6 @@ static struct msm_sensor_power_setting s5k3m2_power_setting[] = {
 		.config_val = GPIO_OUT_HIGH,
 		.delay = 1,
 	},
-
 	{
 		.seq_type = SENSOR_VREG,
 		.seq_val = CAM_VDIG,
@@ -63,23 +68,18 @@ static struct msm_sensor_power_setting s5k3m2_power_setting[] = {
 		.config_val = 0,
 		.delay = 0,
 	},
-	{
-		.seq_type = SENSOR_GPIO,
-		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_LOW,
-		.delay = 1,
-	},
+
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
 		.config_val = GPIO_OUT_HIGH,
-		.delay = 30,
+		.delay = 1,
 	},
 	{
 		.seq_type = SENSOR_CLK,
 		.seq_val = SENSOR_CAM_MCLK,
 		.config_val = 24000000,
-		.delay = 1,
+		.delay = 10,
 	},
 	{
 		.seq_type = SENSOR_I2C_MUX,
@@ -159,7 +159,7 @@ static int s5k3m2_wait_otp_page(struct msm_sensor_ctrl_t *s_ctrl, u16 page)
 	S5K3M2_WW(0x030A, 0x0001);
 	S5K3M2_WW(0x0308, 0x0008);
 	S5K3M2_WW(0x0100, 0x0100);
-	msleep(10);
+	usleep_range(10000, 11000);
 	S5K3M2_WW(0x0A02, page);
 	S5K3M2_WW(0x0A00, 0x0100);
 

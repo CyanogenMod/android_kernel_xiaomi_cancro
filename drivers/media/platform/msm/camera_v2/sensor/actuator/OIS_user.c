@@ -159,7 +159,7 @@ void fadj_ois_gyro_offset_calibraion ( void )
 	s32_dat1 = 0;
 	s32_dat2 = 0;
 	for( u16_i = 1; u16_i <= u16_avrN; u16_i += 1 ) {
-		msleep(5);
+		usleep_range(5000, 6000);
 		u16_tmp_read1 = I2C_OIS_mem__read( _M_DigGx );
 		u16_tmp_read2 = I2C_OIS_mem__read( _M_DigGy );
 		s32_dat1 += u16_tmp_read1;
@@ -189,13 +189,13 @@ void fadj_ois_gyro_offset_calibraion ( void )
 
         g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_write(
             &g_i2c_ctrl->i2c_client, 0x3E, FADJ_MEM.gl_GX_OFS, MSM_CAMERA_I2C_BYTE_DATA);
-	msleep(1);
+	usleep_range(1000, 2000);
         g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_write(
             &g_i2c_ctrl->i2c_client, 0x3F, FADJ_MEM.gl_GX_OFS >> 8, MSM_CAMERA_I2C_BYTE_DATA);
-	msleep(1);
+	usleep_range(1000, 2000);
         g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_write(
             &g_i2c_ctrl->i2c_client, 0x40, FADJ_MEM.gl_GY_OFS, MSM_CAMERA_I2C_BYTE_DATA);
-	msleep(1);
+	usleep_range(1000, 2000);
 	g_i2c_ctrl->i2c_client.i2c_func_tbl->i2c_write(
             &g_i2c_ctrl->i2c_client, 0x41, FADJ_MEM.gl_GY_OFS >> 8, MSM_CAMERA_I2C_BYTE_DATA);
 

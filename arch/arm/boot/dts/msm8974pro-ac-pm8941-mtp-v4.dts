@@ -29,7 +29,15 @@
 		qcom,actuator-src = <&actuator0>;
 };
 
+&eeprom1 {
+		cam_vdig-supply = <&pm8941_l3>;
+		cam_vana-supply = <&pm8941_l17>;
+		cam_vio-supply = <&pm8941_lvs3>;
+		cam_vaf-supply = <&pm8941_l23>;
+};
+
 &s5k3m2 {
+		qcom,eeprom-src = <&eeprom1>;
 		cam_vdig-supply = <&pm8941_l3>;
 		cam_vana-supply = <&pm8941_l17>;
 		cam_vio-supply = <&pm8941_lvs3>;

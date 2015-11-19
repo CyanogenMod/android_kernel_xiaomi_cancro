@@ -171,7 +171,7 @@ static int32_t ov4688_match_id(struct msm_sensor_ctrl_t *s_ctrl)
         if (rc < 0)
                 pr_err("%s:%d failed\n", __func__, __LINE__);
 
-	msleep(2);
+	usleep_range(2000, 3000);
 
         rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_write_table(
                 s_ctrl->sensor_i2c_client, &otp_read_setting);
@@ -216,13 +216,17 @@ static int32_t ov4688_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 
 	pr_info("ov4688 %02x%02x %02d.%02d.%02d [%02x:%02x] [%02x %02x]  %02x (%02x)",
-                idd[1], idd[2], idd[3], idd[4], idd[5], idd[6], idd[7], idd[8], idd[9], idd[10], idd[11]);
-
+				idd[1], idd[2], idd[3], idd[4], idd[5], idd[6], idd[7], idd[8],
+				idd[9], idd[10], idd[11]);
 
 	if(idd[1] == 0x25) { /* 0x2501 is PRIMAX 0x1502 is LITEON */
 		s_ctrl->sensordata->sensor_name = "ov4689";
 		RG_Ratio_Typical = RG_Primax;
 		BG_Ratio_Typical = BG_Primax;
+	}
+
+	if ((idd[1] == 0x15) && (idd[2] == 0x01)) { /* 0x1501 is LITEON with largan */
+		s_ctrl->sensordata->sensor_name = "ov4689";
 	}
 
 	rg = ((idd[10] & 0xC0) >> 6) + (idd[6] << 2);

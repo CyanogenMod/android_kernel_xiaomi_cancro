@@ -275,7 +275,7 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			      struct msm_eeprom_memory_block_t *block)
 {
 	int rc = 0;
-	int j;
+	int j, delay;
 	struct msm_eeprom_memory_map_t *emap = block->map;
 	uint8_t *memptr = block->mapdata;
 	struct msm_eeprom_board_info *eb_info = NULL;
@@ -300,7 +300,8 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
 				&(e_ctrl->i2c_client), emap[j].page.addr,
 				emap[j].page.data, emap[j].page.data_t);
-				msleep(emap[j].page.delay);
+				delay = emap[j].page.delay * 1000;
+				usleep_range(delay, delay + 1000);
 			if (rc < 0) {
 				pr_err("%s: page write failed\n", __func__);
 				return rc;
@@ -311,7 +312,8 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
 				&(e_ctrl->i2c_client), emap[j].pageen.addr,
 				emap[j].pageen.data, emap[j].pageen.data_t);
-				msleep(emap[j].pageen.delay);
+				delay = emap[j].pageen.delay * 1000;
+				usleep_range(delay, delay + 1000);
 			if (rc < 0) {
 				pr_err("%s: page enable failed\n", __func__);
 				return rc;
@@ -322,7 +324,8 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_poll(
 				&(e_ctrl->i2c_client), emap[j].poll.addr,
 				emap[j].poll.data, emap[j].poll.data_t);
-				msleep(emap[j].poll.delay);
+				delay = emap[j].poll.delay * 1000;
+				usleep_range(delay, delay + 1000);
 			if (rc < 0) {
 				pr_err("%s: poll failed\n", __func__);
 				return rc;
