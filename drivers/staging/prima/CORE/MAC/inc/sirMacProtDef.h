@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -18,26 +18,14 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
+
+
 
 
 /*
@@ -55,7 +43,7 @@
 
 #include "palTypes.h"
 #include "sirTypes.h"
-#include "wniCfgSta.h"
+#include "wniCfg.h"
 #include "aniCompiler.h"
 
 
@@ -185,9 +173,10 @@
 #define SIR_MAC_ACTION_UNPROT_WNM     11
 #define SIR_MAC_ACTION_TDLS           12
 #define SIR_MAC_ACITON_MESH           13
-#define SIR_MAC_ACTION_MULTIHOP       14
+#define SIR_MAC_ACTION_MHF            14
 #define SIR_MAC_SELF_PROTECTED        15
 #define SIR_MAC_ACTION_WME            17
+#define SIR_MAC_ACTION_FST            18
 #define SIR_MAC_ACTION_VHT            21
 
 
@@ -197,6 +186,7 @@
 #define SIR_MAC_QOS_ADD_TS_RSP      1
 #define SIR_MAC_QOS_DEL_TS_REQ      2
 #define SIR_MAC_QOS_SCHEDULE        3
+#define SIR_MAC_QOS_MAP_CONFIGURE   4
 // and these are proprietary
 #define SIR_MAC_QOS_DEF_BA_REQ      4
 #define SIR_MAC_QOS_DEF_BA_RSP      5
@@ -263,6 +253,12 @@
 #define SIR_MAC_ACTION_VENDOR_SPECIFIC_CATEGORY     0x7F
 #define SIR_MAC_ACTION_P2P_SUBTYPE_PRESENCE_RSP     2
 
+// Public Action for 20/40 BSS Coexistence
+#ifdef WLAN_FEATURE_AP_HT40_24G
+#define SIR_MAC_ACTION_2040_BSS_COEXISTENCE     0
+#endif
+
+
 #ifdef WLAN_FEATURE_11W
 //11w SA query request/response action frame category code
 #define SIR_MAC_SA_QUERY_REQ             0
@@ -281,6 +277,13 @@
 #define SIR_MAC_TDLS_DIS_REQ             10
 #define SIR_MAC_TDLS_DIS_RSP             14
 #endif
+
+/* WNM Action field values; IEEE Std 802.11-2012, 8.5.14.1, Table 8-250 */
+#define SIR_MAC_WNM_BSS_TM_QUERY         6
+#define SIR_MAC_WNM_BSS_TM_REQUEST       7
+#define SIR_MAC_WNM_BSS_TM_RESPONSE      8
+#define SIR_MAC_WNM_NOTIF_REQUEST        26
+#define SIR_MAC_WNM_NOTIF_RESPONSE       27
 
 #define SIR_MAC_MAX_RANDOM_LENGTH   2306
 
@@ -414,6 +417,8 @@
 #define SIR_MAC_HT_INFO_EID      61
 #define SIR_MAC_HT_INFO_EID_MIN    0
 #define SIR_MAC_HT_INFO_EID_MAX    255
+#define SIR_MAC_OBSS_SCAN_PARAMETERS_EID 74
+#define SIR_MAC_EXTENDED_CAPABILITIES_EID 127
 
 #ifdef WLAN_FEATURE_11AC
 #define SIR_MAC_VHT_CAPABILITIES_EID   191
@@ -428,6 +433,7 @@
 #define SIR_MAC_ANI_WORKAROUND_EID_MIN     0
 #define SIR_MAC_ANI_WORKAROUND_EID_MAX     255
 
+#define SIR_MAC_MAX_ADD_IE_LENGTH   500
 /// Maximum length of each IE
 #define SIR_MAC_MAX_IE_LENGTH       255
 
@@ -438,9 +444,9 @@
 #define SIR_MAC_RSN_IE_MIN_LENGTH   2
 #define SIR_MAC_WPA_IE_MIN_LENGTH   6
 
-#ifdef FEATURE_WLAN_CCX
-#define CCX_VERSION_4               4
-#define CCX_VERSION_SUPPORTED       CCX_VERSION_4
+#ifdef FEATURE_WLAN_ESE
+#define ESE_VERSION_4               4
+#define ESE_VERSION_SUPPORTED       ESE_VERSION_4
 
 // When station sends Radio Management Cap.
 // State should be normal=1
@@ -692,7 +698,9 @@ typedef enum eSirMacStatusCodes
     eSIR_MAC_SHORT_SLOT_NOT_SUPORTED_STATUS       = 25, //Association denied due to requesting station not supporting the Short Slot Time
                                                         //option
     eSIR_MAC_DSSS_OFDM_NOT_SUPPORTED_STATUS       = 26, //Association denied due to requesting station not supporting the DSSS-OFDM option
-    // reserved                                     27-31
+    // reserved                                     27-29
+    eSIR_MAC_TRY_AGAIN_LATER                      = 30, //Association request rejected temporarily, try again later
+    // reserved                                     31
     eSIR_MAC_QOS_UNSPECIFIED_FAILURE_STATUS       = 32, //Unspecified, QoS-related failure
     eSIR_MAC_QAP_NO_BANDWIDTH_STATUS              = 33, //Association denied because QoS AP has insufficient bandwidth to handle another
                                                         //QoS STA
@@ -724,11 +732,11 @@ typedef enum eSirMacStatusCodes
     eSIR_MAC_DSSS_CCK_RATE_MUST_SUPPORT_STATUS    = 52, //FIXME: 
     eSIR_MAC_DSSS_CCK_RATE_NOT_SUPPORT_STATUS     = 53,
     eSIR_MAC_PSMP_CONTROLLED_ACCESS_ONLY_STATUS   = 54,
-#ifdef FEATURE_WLAN_CCX    
-    eSIR_MAC_CCX_UNSPECIFIED_QOS_FAILURE_STATUS   = 200, //CCX-Unspecified, QoS related failure in (Re)Assoc response frames
-    eSIR_MAC_CCX_TSPEC_REQ_REFUSED_STATUS         = 201, //CCX-TSPEC request refused due to AP's policy configuration in AddTs Rsp, (Re)Assoc Rsp.
-    eSIR_MAC_CCX_ASSOC_DENIED_INSUFF_BW_STATUS    = 202, //CCX-Assoc denied due to insufficient bandwidth to handle new TS in (Re)Assoc Rsp.
-    eSIR_MAC_CCX_INVALID_PARAMETERS_STATUS        = 203, //CCX-Invalid parameters. (Re)Assoc request had one or more TSPEC parameters with 
+#ifdef FEATURE_WLAN_ESE
+    eSIR_MAC_ESE_UNSPECIFIED_QOS_FAILURE_STATUS   = 200, //ESE-Unspecified, QoS related failure in (Re)Assoc response frames
+    eSIR_MAC_ESE_TSPEC_REQ_REFUSED_STATUS         = 201, //ESE-TSPEC request refused due to AP's policy configuration in AddTs Rsp, (Re)Assoc Rsp.
+    eSIR_MAC_ESE_ASSOC_DENIED_INSUFF_BW_STATUS    = 202, //ESE-Assoc denied due to insufficient bandwidth to handle new TS in (Re)Assoc Rsp.
+    eSIR_MAC_ESE_INVALID_PARAMETERS_STATUS        = 203, //ESE-Invalid parameters. (Re)Assoc request had one or more TSPEC parameters with
                                                          //invalid values.
 #endif
 
@@ -1292,7 +1300,6 @@ typedef __ani_attr_pre_packed struct sSirMacEdcaParamSetIE
     tSirMacEdcaParamRecord acvo; // voice
 } __ani_attr_packed tSirMacEdcaParamSetIE;
 
-#if 1
 typedef __ani_attr_pre_packed struct sSirMacQoSParams
 {
     tANI_U8        count;
@@ -1300,7 +1307,6 @@ typedef __ani_attr_pre_packed struct sSirMacQoSParams
     tANI_U8        CWmin[8];
     tANI_U8        AIFS[8];
 } __ani_attr_packed tSirMacQoSParams;
-#endif
 
 typedef __ani_attr_pre_packed struct sSirMacQbssLoadIE
 {
@@ -1419,8 +1425,8 @@ typedef __ani_attr_pre_packed struct sSirMacTclasParamEthernet
 typedef __ani_attr_pre_packed struct sSirMacTclasParamIPv4
 {
     tANI_U8             version;
-    tANI_U32            srcIpAddr;
-    tANI_U32            dstIpAddr;
+    tANI_U8             srcIpAddr[4];
+    tANI_U8             dstIpAddr[4];
     tANI_U16            srcPort;
     tANI_U16            dstPort;
     tANI_U8             dscp;
@@ -1690,6 +1696,9 @@ typedef  struct sSirMacRpiReportIE
 } tSirMacRpiReportIE, *tpSirMacRpiReportIE;
 
 #define SIR_MAC_MAX_SUPP_RATES            32
+
+#define SIR_MAC_MAX_SUPP_CHANNELS            100
+#define SIR_MAC_MAX_SUPP_OPER_CLASSES        32
 
 #define SIR_MAC_MAX_EXTN_CAP               8
 
@@ -2430,7 +2439,7 @@ typedef __ani_attr_pre_packed struct sSirMacActionFrameHdr
     tANI_U8    actionID;
 } __ani_attr_packed tSirMacActionFrameHdr, *tpSirMacActionFrameHdr;
 
-#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
 typedef __ani_attr_pre_packed struct sSirMacVendorSpecificFrameHdr
 {
     tANI_U8    category;
@@ -2771,6 +2780,18 @@ typedef __ani_attr_pre_packed struct sSirMacQoSDelBARsp
 #define SIR_MAC_RATE_216 1006
 #define SIR_MAC_RATE_240 1007
 
+#define SIR_MAC_RATE_1_BITMAP    (1<<0)
+#define SIR_MAC_RATE_2_BITMAP    (1<<1)
+#define SIR_MAC_RATE_5_5_BITMAP  (1<<2)
+#define SIR_MAC_RATE_11_BITMAP   (1<<3)
+#define SIR_MAC_RATE_6_BITMAP    (1<<4)
+#define SIR_MAC_RATE_9_BITMAP    (1<<5)
+#define SIR_MAC_RATE_12_BITMAP   (1<<6)
+#define SIR_MAC_RATE_18_BITMAP   (1<<7)
+#define SIR_MAC_RATE_24_BITMAP   (1<<8)
+#define SIR_MAC_RATE_36_BITMAP   (1<<9)
+#define SIR_MAC_RATE_48_BITMAP   (1<<10)
+#define SIR_MAC_RATE_54_BITMAP   (1<<11)
 
 #define sirIsArate(x) ((((tANI_U8)x)==SIR_MAC_RATE_6) || \
                        (((tANI_U8)x)==SIR_MAC_RATE_9) || \
@@ -2856,4 +2877,10 @@ typedef __ani_attr_pre_packed struct sSirPhy11aHdr
 } __ani_attr_packed tSirPhy11aHdr, *tpSirPhy11aHdr;
 
 #define SIR_MAC_MIN_IE_LEN 2 // Minimum IE length for IE validation
+
+
+#define SIR_MAC_TI_TYPE_REASSOC_DEADLINE        1
+#define SIR_MAC_TI_TYPE_KEY_LIFETIME            2
+#define SIR_MAC_TI_TYPE_ASSOC_COMEBACK          3
+
 #endif /* __MAC_PROT_DEFS_H */

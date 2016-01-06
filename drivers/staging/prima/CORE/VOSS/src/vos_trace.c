@@ -18,25 +18,11 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 /**=========================================================================
@@ -47,9 +33,6 @@
 
    Trace, logging, and debugging definitions and APIs
 
-   Copyright 2008,2011 (c) Qualcomm, Incorporated.  All Rights Reserved.
-
-   Qualcomm Confidential and Proprietary.
 
   ========================================================================*/
 
@@ -116,6 +99,8 @@ moduleTraceInfo gVosTraceInfo[ VOS_MODULE_ID_MAX ] =
    [VOS_MODULE_ID_BAP]        = { VOS_DEFAULT_TRACE_LEVEL, "BAP" },
    [VOS_MODULE_ID_TL]         = { VOS_DEFAULT_TRACE_LEVEL, "TL " },
    [VOS_MODULE_ID_WDI]        = { VOS_DEFAULT_TRACE_LEVEL, "WDI" },
+   [VOS_MODULE_ID_SVC]        = { VOS_DEFAULT_TRACE_LEVEL, "SVC" },
+   [VOS_MODULE_ID_RSV4]       = { VOS_DEFAULT_TRACE_LEVEL, "RS4" },
    [VOS_MODULE_ID_HDD]        = { VOS_DEFAULT_TRACE_LEVEL, "HDD" },
    [VOS_MODULE_ID_SME]        = { VOS_DEFAULT_TRACE_LEVEL, "SME" },
    [VOS_MODULE_ID_PE]         = { VOS_DEFAULT_TRACE_LEVEL, "PE " },
@@ -239,72 +224,6 @@ void vos_snprintf(char *strBuffer, unsigned  int size, char *strFormat, ...)
     va_end( val );
 }
 
-#ifdef WCONN_TRACE_KMSG_LOG_BUFF
-
-/* 64k::  size should be power of 2 to
-   get serial 'wconnstrContBuffIdx'  index */
-#define KMSG_WCONN_TRACE_LOG_MAX    65536
-
-static char wconnStrLogBuff[KMSG_WCONN_TRACE_LOG_MAX];
-static unsigned int wconnstrContBuffIdx;
-static void kmsgwconnstrlogchar(char c)
-{
-   wconnStrLogBuff[wconnstrContBuffIdx & (KMSG_WCONN_TRACE_LOG_MAX-1)] = c;
-   wconnstrContBuffIdx++;
-}
-
-/******************************************************************************
- * function:: kmsgwconnBuffWrite()
- * wconnlogstrRead -> Recieved the string(log msg) from vos_trace_msg()
- * 1) Get the timetick, convert into HEX and store in wconnStrLogBuff[]
- * 2) And 'pwconnlogstr' would be copied into wconnStrLogBuff[] character by
-      character
- * 3) wconnStrLogBuff[] is been treated as circular buffer.
- *
- * Note:: In T32 simulator the content of wconnStrLogBuff[] will appear as
-          continuous string please use logparse.cmm file to extract into
-          readable format
- *******************************************************************************/
-
-void kmsgwconnBuffWrite(const char *wconnlogstrRead)
-{
-   const char *pwconnlogstr = wconnlogstrRead;
-   static const char num[16] = {'0','1','2','3','4','5','6','7','8','9','A',
-                                'B','C','D','E','F'};
-   v_TIME_t timetick;
-   int bits; /*timetick for now returns 32 bit number*/
-
-   timetick = vos_timer_get_system_time();
-   bits = sizeof(timetick) * 8/*number of bits in a byte*/;
-
-   kmsgwconnstrlogchar('[');
-
-   for ( ; bits > 0; bits -= 4 )
-      kmsgwconnstrlogchar( num[((timetick & (0xF << (bits-4)))>>(bits-4))] );
-
-   kmsgwconnstrlogchar(']');
-
-   for ( ; *pwconnlogstr; pwconnlogstr++)
-   {
-      kmsgwconnstrlogchar(*pwconnlogstr);
-   }
-   kmsgwconnstrlogchar('\n');/*log \n*/
-}
-
-spinlock_t gVosSpinLock;
-
-void vos_wconn_trace_init(void)
-{
-    spin_lock_init(&gVosSpinLock);
-}
-
-void vos_wconn_trace_exit(void)
-{
-    /* does nothing */
-}
-
-#endif
-
 #ifdef VOS_ENABLE_TRACING
 
 /*----------------------------------------------------------------------------
@@ -334,7 +253,6 @@ void vos_trace_msg( VOS_MODULE_ID module, VOS_TRACE_LEVEL level, char *strFormat
 {
    char strBuffer[VOS_TRACE_BUFFER_SIZE];
    int n;
-   unsigned long irq_flag;
 
    // Print the trace message when the desired level bit is set in the module
    // tracel level mask.
@@ -350,8 +268,7 @@ void vos_trace_msg( VOS_MODULE_ID module, VOS_TRACE_LEVEL level, char *strFormat
       va_start(val, strFormat);
 
       // print the prefix string into the string buffer...
-      n = snprintf(strBuffer, VOS_TRACE_BUFFER_SIZE, "wlan: [%d:%2s:%3s] ",
-                   in_interrupt() ? 0 : current->pid,
+      n = snprintf(strBuffer, VOS_TRACE_BUFFER_SIZE, "wlan: [%2s:%3s] ",
                    (char *) TRACE_LEVEL_STR[ level ],
                    (char *) gVosTraceInfo[ module ].moduleNameStr );
 
@@ -360,19 +277,13 @@ void vos_trace_msg( VOS_MODULE_ID module, VOS_TRACE_LEVEL level, char *strFormat
       {
          vsnprintf(strBuffer + n, VOS_TRACE_BUFFER_SIZE - n, strFormat, val );
 
-#ifdef WCONN_TRACE_KMSG_LOG_BUFF
-         spin_lock_irqsave (&gVosSpinLock, irq_flag);
-         kmsgwconnBuffWrite(strBuffer);
-         spin_unlock_irqrestore (&gVosSpinLock, irq_flag);
-#endif
-
 #ifdef WLAN_LOGGING_SOCK_SVC_ENABLE
          wlan_log_to_user(level, (char *)strBuffer, strlen(strBuffer));
 #else
          pr_err("%s\n", strBuffer);
 #endif
       }
-     va_end(val);
+      va_end(val);
    }
 }
 
@@ -678,7 +589,7 @@ void vosTraceDumpAll(void *pMac, v_U8_t code, v_U8_t session,
         return;
     }
 
-    VOS_TRACE( VOS_MODULE_ID_SYS, VOS_TRACE_LEVEL_ERROR,
+    VOS_TRACE( VOS_MODULE_ID_SYS, VOS_TRACE_LEVEL_INFO,
                "Total Records: %d, Head: %d, Tail: %d",
                gvosTraceData.num, gvosTraceData.head, gvosTraceData.tail);
 

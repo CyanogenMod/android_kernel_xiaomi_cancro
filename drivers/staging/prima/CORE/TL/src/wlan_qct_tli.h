@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -18,26 +18,14 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
+
+
 
 
 #ifndef WLAN_QCT_TLI_H
@@ -134,6 +122,7 @@ when        who    what, where, why
 
 /*WAPI protocol type */
 #define WLANTL_LLC_WAI_TYPE              0x88b4
+#define WLANTL_ETHERTYPE_ARP             0x0806
 
 #ifdef FEATURE_WLAN_TDLS
 #define WLANTL_LLC_TDLS_TYPE             0x890d
@@ -180,16 +169,21 @@ when        who    what, where, why
 #define WLANTL_CTRL_FRAME_TYPE       0x10
 #define WLANTL_DATA_FRAME_TYPE       0x20
 
+#define WLANTL_MGMT_PROBE_REQ_FRAME_TYPE    0x04
+
 /*Value of the data type field in the 802.11 frame */
 #define WLANTL_80211_DATA_TYPE         0x02
 #define WLANTL_80211_DATA_QOS_SUBTYPE  0x08
 #define WLANTL_80211_NULL_QOS_SUBTYPE  0x0C
+#define WLANTL_80211_MGMT_ACTION_SUBTYPE  0x0D
+#define WLANTL_80211_MGMT_ACTION_NO_ACK_SUBTYPE  0x0E
 
 /*Defines for internal utility functions */
 #define WLANTL_FRAME_TYPE_BCAST 0xff
 #define WLANTL_FRAME_TYPE_MCAST 0x01
 #define WLANTL_FRAME_TYPE_UCAST 0x00
 
+#define WLANTL_FRAME_TYPESUBTYPE_MASK 0x3F
 
 /*-------------------------------------------------------------------------
   BT-AMP related definition - !!! should probably be moved to BT-AMP header
@@ -285,6 +279,10 @@ typedef enum
 
   /* Detected a fatal error issue SSR */
   WLANTL_TX_FATAL_ERROR = 7,
+
+  WLANTL_TX_FW_DEBUG = 8,
+
+  WLANTL_TX_KICKDXE = 9,
 
   WLANTL_TX_MAX
 }WLANTL_TxSignalsType;
@@ -504,6 +502,7 @@ typedef struct
   v_TIME_t              cacheClearTime;
 }WLANTL_CacheInfoType;
 
+
 /*---------------------------------------------------------------------------
   STA Client type
 ---------------------------------------------------------------------------*/
@@ -582,7 +581,7 @@ typedef struct
   v_U8_t                        ucMPDUHeaderLen;
 
   /* Enabled ACs currently serviced by TL (automatic setup in TL)*/
-  v_U8_t                        aucACMask[WLANTL_MAX_AC];
+  v_U8_t                        aucACMask[WLANTL_NUM_TX_QUEUES];
 
   /* Current AC to be retrieved */
   WLANTL_ACEnumType             ucCurrentAC;
@@ -685,6 +684,23 @@ typedef struct
   v_U8_t ptkInstalled;
 
   v_U32_t       linkCapacity;
+
+#ifdef WLAN_FEATURE_LINK_LAYER_STATS
+
+  /* Value of the averaged Data RSSI for this station */
+  v_S7_t                        rssiDataAvg;
+
+  /* Value of the averaged Data RSSI for this station in BMPS */
+  v_S7_t                        rssiDataAvgBmps;
+
+  /* Value of the Alpha to calculate Data RSSI average */
+  v_S7_t                        rssiDataAlpha;
+
+  WLANTL_InterfaceStatsType         interfaceStats;
+#endif
+  /* BD Rate for transmitting ARP packets */
+  v_U8_t arpRate;
+  v_BOOL_t arpOnWQ5;
 }WLANTL_STAClientType;
 
 /*---------------------------------------------------------------------------
@@ -857,6 +873,8 @@ typedef struct
   /* Current served station ID in round-robin method to traverse all stations.*/
   WLANTL_ACEnumType uCurServedAC;
 
+  WLANTL_SpoofMacAddr   spoofMacAddr;
+
   /* How many weights have not been served in current AC. */
   v_U8_t ucCurLeftWeight;
 
@@ -878,6 +896,9 @@ typedef struct
   v_BOOL_t                  isBMPS;
   /* Whether WDA_DS_TX_START_XMIT msg is pending or not */
   v_BOOL_t   isTxTranmitMsgPending;
+  WLANTL_MonRxCBType           pfnMonRx;
+  v_BOOL_t              isConversionReq;
+
 }WLANTL_CbType;
 
 /*==========================================================================
@@ -1374,9 +1395,15 @@ WLANTL_Translate80211To8023Header
   v_U8_t          ucHeaderLen,
   WLANTL_CbType*  pTLCb,
   v_U8_t          ucSTAId,
-  v_BOOL_t	  bForwardIAPPwithLLC
+  v_BOOL_t       bForwardIAPPwithLLC
 );
 
+VOS_STATUS
+WLANTL_MonTranslate80211To8023Header
+(
+  vos_pkt_t*      vosDataBuff,
+  WLANTL_CbType*  pTLCb
+);
 /*==========================================================================
   FUNCTION    WLANTL_FindFrameTypeBcMcUc
 

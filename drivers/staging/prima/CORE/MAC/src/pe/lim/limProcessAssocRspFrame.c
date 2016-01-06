@@ -1,25 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
- */
-/*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -40,8 +20,13 @@
  */
 
 /*
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
+ */
+
+/*
  *
- * Airgo Networks, Inc proprietary. All rights reserved.
  * This file limProcessAssocRspFrame.cc contains the code
  * for processing Re/Association Response Frame.
  * Author:        Chandra Modumudi
@@ -53,7 +38,7 @@
  */
 
 #include "wniApi.h"
-#include "wniCfgSta.h"
+#include "wniCfg.h"
 #include "aniGlobal.h"
 #include "cfgApi.h"
 
@@ -67,8 +52,8 @@
 #include "limStaHashApi.h"
 #include "limSendMessages.h"
 
-#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
-#include "ccxApi.h"
+#if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
+#include "eseApi.h"
 #endif
 
 extern tSirRetStatus schBeaconEdcaProcess(tpAniSirGlobal pMac, tSirMacEdcaParamSetIE *edca, tpPESession psessionEntry);
@@ -131,9 +116,16 @@ void limUpdateAssocStaDatas(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpSirAsso
     
            if ( pAssocRsp->HTCaps.present ) {
                pStaDs->htGreenfield = ( tANI_U8 ) pAssocRsp->HTCaps.greenField;
-               pStaDs->htSupportedChannelWidthSet = ( tANI_U8 ) (pAssocRsp->HTCaps.supportedChannelWidthSet ? 
+               if (psessionEntry->htSupportedChannelWidthSet)
+               {
+                   pStaDs->htSupportedChannelWidthSet = ( tANI_U8 ) (pAssocRsp->HTCaps.supportedChannelWidthSet ?
                                                                                pAssocRsp->HTInfo.recommendedTxWidthSet : 
                                                                                pAssocRsp->HTCaps.supportedChannelWidthSet );
+               }
+               else
+               {
+                   pStaDs->htSupportedChannelWidthSet = eHT_CHANNEL_WIDTH_20MHZ;
+               }
                    pStaDs->htLsigTXOPProtection = ( tANI_U8 ) pAssocRsp->HTCaps.lsigTXOPProtection;
                    pStaDs->htMIMOPSState =  (tSirMacHTMIMOPowerSaveState)pAssocRsp->HTCaps.mimoPowerSave;
                    pStaDs->htMaxAmsduLength = ( tANI_U8 ) pAssocRsp->HTCaps.maximalAMSDUsize;
@@ -158,10 +150,12 @@ void limUpdateAssocStaDatas(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpSirAsso
        if(IS_DOT11_MODE_VHT(psessionEntry->dot11mode))
        {
            pStaDs->mlmStaContext.vhtCapability = pAssocRsp->VHTCaps.present;
+           if (pAssocRsp->VHTCaps.present && psessionEntry->htSupportedChannelWidthSet)
+               pStaDs->vhtSupportedChannelWidthSet = pAssocRsp->VHTOperation.chanWidth;
        }
        if (limPopulatePeerRateSet(pMac, &pStaDs->supportedRates,
                                 pAssocRsp->HTCaps.supportedMCSSet,
-                                false,psessionEntry , &pAssocRsp->VHTCaps) != eSIR_SUCCESS) 
+                                false,psessionEntry , &pAssocRsp->VHTCaps) != eSIR_SUCCESS)
 #else
        if (limPopulatePeerRateSet(pMac, &pStaDs->supportedRates, pAssocRsp->HTCaps.supportedMCSSet, false,psessionEntry) != eSIR_SUCCESS)
 #endif
@@ -369,7 +363,7 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
          (psessionEntry->limMlmState != eLIM_MLM_WT_ASSOC_RSP_STATE)) ||
         ((subType == LIM_REASSOC) &&
          ((psessionEntry->limMlmState != eLIM_MLM_WT_REASSOC_RSP_STATE) 
-#if defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
          && (psessionEntry->limMlmState != eLIM_MLM_WT_FT_REASSOC_RSP_STATE)
 #endif
          )))
@@ -377,16 +371,25 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
         /// Received unexpected Re/Association Response frame
 
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG
-        PELOG1(limLog(pMac, LOG1,  FL("Recieved Re/Assoc rsp in unexpected "
+        limLog(pMac, LOG1,  FL("Recieved Re/Assoc rsp in unexpected "
             "state %d on session=%d"),
-            psessionEntry->limMlmState, psessionEntry->peSessionId);)
+            psessionEntry->limMlmState, psessionEntry->peSessionId);
 #endif
         // Log error
         if (!pHdr->fc.retry)
         {
-            limLog(pMac, LOGE,
-               FL("received Re/Assoc rsp frame is not a retry frame"));
-            limPrintMlmState(pMac, LOGE, psessionEntry->limMlmState);
+            if ( !(pMac->lim.retryPacketCnt & 0xf))
+            {
+                limLog(pMac, LOGE,
+                   FL("received Re/Assoc rsp frame is not a retry frame, "
+                     "frame count %d"), ++pMac->lim.retryPacketCnt);
+                limPrintMlmState(pMac, LOGE, psessionEntry->limMlmState);
+            }
+            else
+            {
+                pMac->lim.retryPacketCnt++;
+            }
+
         }
         vos_mem_free(pBeaconStruct);
         return;
@@ -464,7 +467,12 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
 
         return;
     }
-
+    if(pAssocRsp->ExtCap.present)
+    {
+        limLog(pMac, LOGE, FL("Filling tdls prohibited in session entry"));
+        psessionEntry->tdlsChanSwitProhibited =
+                       pAssocRsp->ExtCap.TDLSChanSwitProhibited ;
+    }
     if(!pAssocRsp->suppRatesPresent)
     {
         PELOGE(limLog(pMac, LOGE, FL("assoc response does not have supported rate set"));)
@@ -524,7 +532,7 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
     }
 #endif    
 
-#ifdef FEATURE_WLAN_CCX    
+#ifdef FEATURE_WLAN_ESE
     if (psessionEntry->tspecIes != NULL) 
     {
         vos_mem_free(psessionEntry->tspecIes);
@@ -544,13 +552,13 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
             vos_mem_copy(psessionEntry->tspecIes,
                          &pAssocRsp->TSPECInfo[0], psessionEntry->tspecLen);
         }
-        PELOG1(limLog(pMac, LOG1, FL(" Tspec EID present in assoc rsp "));)
+        limLog(pMac, LOG1, FL(" Tspec EID present in assoc rsp "));
     }
     else
     {
         psessionEntry->tspecLen = 0;
         psessionEntry->tspecIes = NULL;
-        PELOG1(limLog(pMac, LOG1, FL(" Tspec EID *NOT* present in assoc rsp "));)
+        limLog(pMac, LOG1, FL(" Tspec EID *NOT* present in assoc rsp "));
     }
 #endif
 
@@ -590,7 +598,7 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
         limDeactivateAndChangeTimer(pMac, eLIM_ASSOC_FAIL_TIMER);
     else        // Stop Reassociation failure timer
     {
-#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
         pMac->lim.reAssocRetryAttempt = 0;
         if ((NULL != pMac->lim.pSessionEntry) && (NULL != pMac->lim.pSessionEntry->pLimMlmReassocRetryReq))
         {
@@ -666,8 +674,8 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
     if (subType == LIM_REASSOC)
     {
         // Log success
-        PELOG1(limLog(pMac, LOG1, FL("Successfully Reassociated with BSS"));)
-#ifdef FEATURE_WLAN_CCX
+        limLog(pMac, LOG1, FL("Successfully Reassociated with BSS"));
+#ifdef FEATURE_WLAN_ESE
         {
             tANI_U8 cnt = 0;
             if (pAssocRsp->tsmPresent)
@@ -678,10 +686,10 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
                     // Find the TSPEC IE with VO user priority
                     for (cnt=0; cnt<pAssocRsp->num_tspecs; cnt++) {
                         if ( upToAc(pAssocRsp->TSPECInfo[cnt].user_priority) == EDCA_AC_VO) {
-                            psessionEntry->ccxContext.tsm.tid = pAssocRsp->TSPECInfo[cnt].user_priority;
-                            vos_mem_copy(&psessionEntry->ccxContext.tsm.tsmInfo,
-                                    &pAssocRsp->tsmIE, sizeof(tSirMacCCXTSMIE));
-#ifdef FEATURE_WLAN_CCX_UPLOAD
+                            psessionEntry->eseContext.tsm.tid = pAssocRsp->TSPECInfo[cnt].user_priority;
+                            vos_mem_copy(&psessionEntry->eseContext.tsm.tsmInfo,
+                                    &pAssocRsp->tsmIE, sizeof(tSirMacESETSMIE));
+#ifdef FEATURE_WLAN_ESE_UPLOAD
                             limSendSmeTsmIEInd(pMac,
                                                psessionEntry,
                                                pAssocRsp->tsmIE.tsid,
@@ -689,9 +697,9 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
                                                pAssocRsp->tsmIE.msmt_interval);
 #else
                             limActivateTSMStatsTimer(pMac, psessionEntry);
-#endif /* FEATURE_WLAN_CCX_UPLOAD */
-                            if(psessionEntry->ccxContext.tsm.tsmInfo.state) {
-                                psessionEntry->ccxContext.tsm.tsmMetrics.RoamingCount++;
+#endif /* FEATURE_WLAN_ESE_UPLOAD */
+                            if(psessionEntry->eseContext.tsm.tsmInfo.state) {
+                                psessionEntry->eseContext.tsm.tsmMetrics.RoamingCount++;
                             }
                             break;
                         }
@@ -726,7 +734,7 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
             goto assocReject;
         }
 
-#if defined(WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if defined(WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
         if (psessionEntry->limMlmState == eLIM_MLM_WT_FT_REASSOC_RSP_STATE)
         {
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG
@@ -784,12 +792,12 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
     }
 
     // Log success
-    PELOG1(limLog(pMac, LOG1, FL("Successfully Associated with BSS "MAC_ADDRESS_STR),
-           MAC_ADDR_ARRAY(pHdr->sa));)
-#ifdef FEATURE_WLAN_CCX
-    if(psessionEntry->ccxContext.tsm.tsmInfo.state)
+    limLog(pMac, LOG1, FL("Successfully Associated with BSS "MAC_ADDRESS_STR),
+           MAC_ADDR_ARRAY(pHdr->sa));
+#ifdef FEATURE_WLAN_ESE
+    if(psessionEntry->eseContext.tsm.tsmInfo.state)
     {
-        psessionEntry->ccxContext.tsm.tsmMetrics.RoamingCount = 0;
+        psessionEntry->eseContext.tsm.tsmMetrics.RoamingCount = 0;
     }
 #endif
     /**
@@ -844,7 +852,21 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
     limDiagEventReport(pMac, WLAN_PE_DIAG_CONNECTED, psessionEntry, 0, 0);
 #endif
+    if(pAssocRsp->OBSSScanParameters.present)
+    {
+        limUpdateOBSSScanParams(psessionEntry , &pAssocRsp->OBSSScanParameters);
+    }
 
+    if( pAssocRsp->QosMapSet.present )
+    {
+        vos_mem_copy(&psessionEntry->QosMapSet,
+                     &pAssocRsp->QosMapSet,
+                     sizeof(tSirQosMapSet));
+    }
+    else
+    {
+       vos_mem_zero(&psessionEntry->QosMapSet, sizeof(tSirQosMapSet));
+    }
 
      //Update the BSS Entry, this entry was added during preassoc.
     if( eSIR_SUCCESS == limStaSendAddBss( pMac, pAssocRsp,  pBeaconStruct,
@@ -901,7 +923,7 @@ assocReject:
 
     /* CR: vos packet memory is leaked when assoc rsp timeouted/failed. */
     /* notify TL that association is failed so that TL can flush the cached frame  */
-    PELOG1(limLog(pMac, LOG1,  FL("notify TL that association is failed"));)
+    limLog(pMac, LOG1,  FL("notify TL that association is failed"));
     WLANTL_AssocFailed (psessionEntry->staId);
 
     vos_mem_free(pBeaconStruct);

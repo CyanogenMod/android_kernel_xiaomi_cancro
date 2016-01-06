@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -18,25 +18,11 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 /**========================================================================= 
@@ -61,6 +47,7 @@
  * Include Files
  * -------------------------------------------------------------------------*/
 #include <wlan_hdd_dev_pwr.h>
+#include <vos_sched.h>
 #ifdef ANI_BUS_TYPE_PLATFORM
 #include <linux/wcnss_wlan.h>
 #else
@@ -146,7 +133,7 @@ static int wlan_suspend(hdd_context_t* pHddCtx)
    INIT_COMPLETION(pHddCtx->tx_sus_event_var);
 
    /* Indicate Tx Thread to Suspend */
-   set_bit(TX_SUSPEND_EVENT_MASK, &vosSchedContext->txEventFlag);
+   set_bit(TX_SUSPEND_EVENT, &vosSchedContext->txEventFlag);
 
    wake_up_interruptible(&vosSchedContext->txWaitQueue);
 
@@ -164,7 +151,7 @@ static int wlan_suspend(hdd_context_t* pHddCtx)
        * Thread then it means it is going to suspend, so do not return failure
        * from here.
        */
-      if (!test_and_clear_bit(TX_SUSPEND_EVENT_MASK,
+      if (!test_and_clear_bit(TX_SUSPEND_EVENT,
                               &vosSchedContext->txEventFlag))
       {
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
@@ -182,7 +169,7 @@ tx_suspend:
    INIT_COMPLETION(pHddCtx->rx_sus_event_var);
 
    /* Indicate Rx Thread to Suspend */
-   set_bit(RX_SUSPEND_EVENT_MASK, &vosSchedContext->rxEventFlag);
+   set_bit(RX_SUSPEND_EVENT, &vosSchedContext->rxEventFlag);
 
    wake_up_interruptible(&vosSchedContext->rxWaitQueue);
 
@@ -199,7 +186,7 @@ tx_suspend:
         * Thread then it means it is going to suspend, so do not return failure
         * from here.
         */
-       if (!test_and_clear_bit(RX_SUSPEND_EVENT_MASK,
+       if (!test_and_clear_bit(RX_SUSPEND_EVENT,
                                &vosSchedContext->rxEventFlag))
        {
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
@@ -223,14 +210,15 @@ rx_suspend:
    INIT_COMPLETION(pHddCtx->mc_sus_event_var);
 
    /* Indicate MC Thread to Suspend */
-   set_bit(MC_SUSPEND_EVENT_MASK, &vosSchedContext->mcEventFlag);
+   set_bit(MC_SUSPEND_EVENT, &vosSchedContext->mcEventFlag);
 
    wake_up_interruptible(&vosSchedContext->mcWaitQueue);
 
    /* Wait for Suspend Confirmation from MC Thread */
-   rc = wait_for_completion_interruptible_timeout(&pHddCtx->mc_sus_event_var, msecs_to_jiffies(200));
+   rc = wait_for_completion_interruptible_timeout(&pHddCtx->mc_sus_event_var,
+                                                        msecs_to_jiffies(200));
 
-   if(!rc)
+   if (rc <= 0)
    {
        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
             "%s: MC Thread: timeout while suspending %ld",
@@ -241,7 +229,7 @@ rx_suspend:
         * Thread then it means it is going to suspend, so do not return failure
         * from here.
         */
-       if (!test_and_clear_bit(MC_SUSPEND_EVENT_MASK,
+       if (!test_and_clear_bit(MC_SUSPEND_EVENT,
                                &vosSchedContext->mcEventFlag))
        {
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
@@ -335,21 +323,21 @@ static void wlan_resume(hdd_context_t* pHddCtx)
    @return None
 
 ----------------------------------------------------------------------------*/
-int hddDevSuspendHdlr(struct device *dev)
+int __hddDevSuspendHdlr(struct device *dev)
 {
    int ret = 0;
    hdd_context_t* pHddCtx = NULL;
 
+   ENTER();
+
    pHddCtx =  (hdd_context_t*)wcnss_wlan_get_drvdata(dev);
 
-   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s: WLAN suspended by platform driver",__func__);
-
    /* Get the HDD context */
-   if(!pHddCtx) {
-      VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_FATAL,"%s: HDD context is Null",__func__);
-      return 0;
+   ret = wlan_hdd_validate_context(pHddCtx);
+   if (0 != ret)
+   {
+       return ret;
    }
-
    if(pHddCtx->isWlanSuspended == TRUE)
    {
       VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_FATAL,"%s: WLAN is already in suspended state",__func__);
@@ -371,7 +359,19 @@ int hddDevSuspendHdlr(struct device *dev)
       suspend_notify_sent = true;
    }
 #endif
+
+   EXIT();
    return 0;
+}
+
+int hddDevSuspendHdlr(struct device *dev)
+{
+    int ret;
+    vos_ssr_protect(__func__);
+    ret = __hddDevSuspendHdlr(dev);
+    vos_ssr_unprotect(__func__);
+
+    return ret;
 }
 
 /*----------------------------------------------------------------------------
@@ -385,14 +385,19 @@ int hddDevSuspendHdlr(struct device *dev)
    @return None
 
 ----------------------------------------------------------------------------*/
-int hddDevResumeHdlr(struct device *dev)
+int __hddDevResumeHdlr(struct device *dev)
 {
    hdd_context_t* pHddCtx = NULL;
+   int ret = 0;
+
+   ENTER();
 
    pHddCtx =  (hdd_context_t*)wcnss_wlan_get_drvdata(dev);
-
-   VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_INFO, "%s: WLAN being resumed by Android OS",__func__);
-
+   ret = wlan_hdd_validate_context(pHddCtx);
+   if (0 != ret)
+   {
+       return ret;
+   }
    if(pHddCtx->isWlanSuspended != TRUE)
    {
       VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_FATAL,"%s: WLAN is already in resumed state",__func__);
@@ -408,8 +413,19 @@ int hddDevResumeHdlr(struct device *dev)
       suspend_notify_sent = false;
    }
 #endif
-
+   EXIT();
    return 0;
+}
+
+int hddDevResumeHdlr(struct device *dev)
+{
+    int ret;
+
+    vos_ssr_protect(__func__);
+    ret = __hddDevResumeHdlr(dev);
+    vos_ssr_unprotect(__func__);
+
+    return ret;
 }
 
 static const struct dev_pm_ops pm_ops = {
@@ -433,10 +449,7 @@ static const struct dev_pm_ops pm_ops = {
 ----------------------------------------------------------------------------*/
 VOS_STATUS hddRegisterPmOps(hdd_context_t *pHddCtx)
 {
-    wcnss_wlan_set_drvdata(pHddCtx->parent_dev, pHddCtx);
-#ifndef FEATURE_R33D
     wcnss_wlan_register_pm_ops(pHddCtx->parent_dev, &pm_ops);
-#endif /* FEATURE_R33D */
     return VOS_STATUS_SUCCESS;
 }
 
@@ -455,9 +468,7 @@ VOS_STATUS hddRegisterPmOps(hdd_context_t *pHddCtx)
 ----------------------------------------------------------------------------*/
 VOS_STATUS hddDeregisterPmOps(hdd_context_t *pHddCtx)
 {
-#ifndef FEATURE_R33D
     wcnss_wlan_unregister_pm_ops(pHddCtx->parent_dev, &pm_ops);
-#endif /* FEATURE_R33D */
     return VOS_STATUS_SUCCESS;
 }
 
@@ -476,21 +487,19 @@ void hddDevTmTxBlockTimeoutHandler(void *usrData)
 {
    hdd_context_t        *pHddCtx = (hdd_context_t *)usrData;
    hdd_adapter_t        *staAdapater;
-   /* Sanity, This should not happen */
-   if(NULL == pHddCtx)
+
+   ENTER();
+   if (0 != (wlan_hdd_validate_context(pHddCtx)))
    {
-      VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_ERROR,
-                "%s: NULL Context", __func__);
-      VOS_ASSERT(0);
-      return;
+       return;
    }
 
    staAdapater = hdd_get_adapter(pHddCtx, WLAN_HDD_INFRA_STATION);
 
-   if(NULL == staAdapater)
+   if ((NULL == staAdapater) || (WLAN_HDD_ADAPTER_MAGIC != staAdapater->magic))
    {
       VOS_TRACE(VOS_MODULE_ID_HDD,VOS_TRACE_LEVEL_ERROR,
-                "%s: NULL Adapter", __func__);
+                FL("invalid Adapter %p"), staAdapater);
       VOS_ASSERT(0);
       return;
    }
@@ -504,11 +513,12 @@ void hddDevTmTxBlockTimeoutHandler(void *usrData)
    pHddCtx->tmInfo.txFrameCount = 0;
 
    /* Resume TX flow */
-    
+   hddLog(VOS_TRACE_LEVEL_INFO, FL("Enabling queues"));
    netif_tx_wake_all_queues(staAdapater->dev);
    pHddCtx->tmInfo.qBlocked = VOS_FALSE;
    mutex_unlock(&pHddCtx->tmInfo.tmOperationLock);
 
+   EXIT();
    return;
 }
 

@@ -1,25 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
- */
-/*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,14 +19,18 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+/*
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
+ */
+
 /******************************************************************************
 *
 * Name:  btcApi.c
 *
 * Description: Routines that make up the BTC API.
 *
-* Copyright 2008 (c) Qualcomm, Incorporated. All Rights Reserved.
-* Qualcomm Confidential and Proprietary.
 *
 ******************************************************************************/
 #include "wlan_qct_wda.h"
@@ -57,12 +41,14 @@
 #include "cfgApi.h"
 #include "pmc.h"
 #include "smeQosInternal.h"
+#include "sme_Trace.h"
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
 #include "vos_diag_core_event.h"
 #include "vos_diag_core_log.h"
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 static void btcLogEvent (tHalHandle hHal, tpSmeBtEvent pBtEvent);
 static void btcRestoreHeartBeatMonitoringHandle(void* hHal);
+static void btcEnableUapsdTimerExpiryHandler(void* hHal);
 static void btcUapsdCheck( tpAniSirGlobal pMac, tpSmeBtEvent pBtEvent );
 VOS_STATUS btcCheckHeartBeatMonitoring(tHalHandle hHal, tpSmeBtEvent pBtEvent);
 static void btcPowerStateCB( v_PVOID_t pContext, tPmcState pmcState );
@@ -136,6 +122,17 @@ VOS_STATUS btcOpen (tHalHandle hHal)
        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcOpen: Fail to init timer");
        return VOS_STATUS_E_FAILURE;
    }
+
+   vosStatus = vos_timer_init( &pMac->btc.enableUapsdTimer,
+                      VOS_TIMER_TYPE_SW,
+                      btcEnableUapsdTimerExpiryHandler,
+                      (void*) hHal);
+
+   if (!VOS_IS_STATUS_SUCCESS(vosStatus)) {
+       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcOpen: Fail to init Uapsd timer");
+       return VOS_STATUS_E_FAILURE;
+   }
+
    if( !HAL_STATUS_SUCCESS(pmcRegisterDeviceStateUpdateInd( pMac, btcPowerStateCB, pMac )) )
    {
        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcOpen: Fail to register PMC callback");
@@ -163,6 +160,16 @@ VOS_STATUS btcClose (tHalHandle hHal)
        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcClose: Fail to destroy timer");
        return VOS_STATUS_E_FAILURE;
    }
+
+   if (VOS_TIMER_STATE_RUNNING ==
+       vos_timer_getCurrentState(&pMac->btc.enableUapsdTimer))
+       vos_timer_stop(&pMac->btc.enableUapsdTimer);
+   vosStatus = vos_timer_destroy(&pMac->btc.enableUapsdTimer);
+   if (!VOS_IS_STATUS_SUCCESS(vosStatus)) {
+       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcClose: Fail to destroy uapsd timer");
+       return VOS_STATUS_E_FAILURE;
+   }
+
    if(!HAL_STATUS_SUCCESS(
       pmcDeregisterDeviceStateUpdateInd(pMac, btcPowerStateCB)))
    {
@@ -267,6 +274,8 @@ static VOS_STATUS btcSendBTEvent(tpAniSirGlobal pMac, tpSmeBtEvent pBtEvent)
    msg.type = WDA_SIGNAL_BT_EVENT;
    msg.reserved = 0;
    msg.bodyptr = ptrSmeBtEvent;
+   MTRACE(vos_trace(VOS_MODULE_ID_SME,
+                 TRACE_CODE_SME_TX_WDA_MSG, NO_SESSION, msg.type));
    if(VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg))
    {
       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "%s: "
@@ -451,6 +460,34 @@ void btcRestoreHeartBeatMonitoringHandle(tHalHandle hHal)
     }
 }
 
+/* ---------------------------------------------------------------------------
+    \fn btcEnableUapsdTimerExpiryHandler
+    \brief  Timer handler to handle the timeout condition when Uapsd timer
+            expires, in this case negotiate for uapsd settings with the AP.
+    \param  hHal - The handle returned by macOpen.
+    \return VOID
+  ---------------------------------------------------------------------------*/
+void btcEnableUapsdTimerExpiryHandler(tHalHandle hHal)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+
+    if (IS_DYNAMIC_WMM_PS_ENABLED)
+    {
+        if (pMac->btc.btcUapsdOk == VOS_FALSE)
+        {
+            pMac->btc.btcUapsdOk = VOS_TRUE;
+            smsLog(pMac, LOG1, FL("Uapsd Timer Expired, Enable Uapsd"));
+            sme_QoSUpdateUapsdBTEvent(pMac);
+        }
+    }
+
+    if (pMac->sme.pBtCoexTDLSNotification)
+    {
+        smsLog(pMac, LOG1, FL("btCoex notification, Enable TDLS"));
+        pMac->sme.pBtCoexTDLSNotification(pMac->pAdapter,
+                                          SIR_COEX_IND_TYPE_TDLS_ENABLE);
+    }
+}
 
 /* ---------------------------------------------------------------------------
     \fn btcSetConfig
@@ -521,6 +558,8 @@ VOS_STATUS btcSendCfgMsg(tHalHandle hHal, tpSmeBtcConfig pSmeBtcConfig)
    msg.type = WDA_BTC_SET_CFG;
    msg.reserved = 0;
    msg.bodyptr = ptrSmeBtcConfig;
+   MTRACE(vos_trace(VOS_MODULE_ID_SME,
+                 TRACE_CODE_SME_TX_WDA_MSG, NO_SESSION, msg.type));
    if(VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg))
    {
       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "btcSendCfgMsg: "
@@ -1778,15 +1817,15 @@ void btcUapsdCheck( tpAniSirGlobal pMac, tpSmeBtEvent pBtEvent )
            if( !fMoreSCO && !pMac->btc.fA2DPUp )
            {
                //All SCO is disconnected
-               pMac->btc.btcUapsdOk = VOS_TRUE;
                smsLog( pMac, LOGE, "BT event (DISCONNECTION) happens, UAPSD-allowed flag (%d) change to TRUE",
-                        pBtEvent->btEventType, pMac->btc.btcUapsdOk );
+                        pMac->btc.btcUapsdOk );
+               pMac->btc.btcUapsdOk = VOS_TRUE;
            }
        }
        break;
    case BT_EVENT_DEVICE_SWITCHED_OFF:
        smsLog( pMac, LOGE, "BT event (DEVICE_OFF) happens, UAPSD-allowed flag (%d) change to TRUE",
-                        pBtEvent->btEventType, pMac->btc.btcUapsdOk );
+                        pMac->btc.btcUapsdOk );
        //Clean up SCO
        for(i=0; i < BT_MAX_SCO_SUPPORT; i++)
        {
@@ -1963,7 +2002,7 @@ eHalStatus btcHandleCoexInd(tHalHandle hHal, void* pMsg)
      {
          if (pMac->roam.configParam.disableAggWithBtc)
          {
-             ccmCfgSetInt(pMac, WNI_CFG_DEL_ALL_RX_BA_SESSIONS_2_4_G_BTC, 1,
+             ccmCfgSetInt(pMac, WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC, 1,
                              NULL, eANI_BOOLEAN_FALSE);
              pMac->btc.btcBssfordisableaggr[0] = pSmeCoexInd->coexIndData[0] & 0xFF;
              pMac->btc.btcBssfordisableaggr[1] = pSmeCoexInd->coexIndData[0] >> 8;
@@ -1981,15 +2020,43 @@ eHalStatus btcHandleCoexInd(tHalHandle hHal, void* pMsg)
      {
          if (pMac->roam.configParam.disableAggWithBtc)
          {
-             ccmCfgSetInt(pMac, WNI_CFG_DEL_ALL_RX_BA_SESSIONS_2_4_G_BTC, 0,
+             ccmCfgSetInt(pMac, WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC, 0,
                              NULL, eANI_BOOLEAN_FALSE);
              smsLog(pMac, LOGW,
              "Coex indication in %s(), type - SIR_COEX_IND_TYPE_ENABLE_AGGREGATION_IN_2p4",
                  __func__);
          }
      }
-     // unknown indication type
-     else
+     else if (pSmeCoexInd->coexIndType == SIR_COEX_IND_TYPE_DISABLE_UAPSD)
+     {
+         smsLog(pMac, LOG1, FL("DISABLE UAPSD BT Event received"));
+         if (VOS_TIMER_STATE_RUNNING ==
+             vos_timer_getCurrentState(&pMac->btc.enableUapsdTimer)) {
+             smsLog(pMac, LOG1, FL("Stop Uapsd Timer"));
+             vos_timer_stop(&pMac->btc.enableUapsdTimer);
+         }
+
+         if (IS_DYNAMIC_WMM_PS_ENABLED) {
+             if (pMac->btc.btcUapsdOk == VOS_TRUE) {
+                 pMac->btc.btcUapsdOk = VOS_FALSE;
+                 sme_QoSUpdateUapsdBTEvent(pMac);
+             }
+         }
+
+         if (pMac->sme.pBtCoexTDLSNotification)
+         {
+             smsLog(pMac, LOG1, FL("btCoex notification, Disable TDLS"));
+             pMac->sme.pBtCoexTDLSNotification(pMac->pAdapter,
+                                               SIR_COEX_IND_TYPE_TDLS_DISABLE);
+         }
+     }
+     else if (pSmeCoexInd->coexIndType == SIR_COEX_IND_TYPE_ENABLE_UAPSD)
+     {
+         smsLog(pMac, LOG1, FL("ENABLE UAPSD BT Event received"));
+         vos_timer_start(&pMac->btc.enableUapsdTimer,
+                         (pMac->fBtcEnableIndTimerVal * 1000));
+     }
+     else // unknown indication type
      {
         smsLog(pMac, LOGE, "unknown Coex indication type in %s()", __func__);
      }

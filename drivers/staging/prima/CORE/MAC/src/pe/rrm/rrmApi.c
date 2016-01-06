@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -18,29 +18,12 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
-
-
-
 
 /**=========================================================================
   
@@ -62,7 +45,7 @@
 #include "wniApi.h"
 #include "sirApi.h"
 #include "aniGlobal.h"
-#include "wniCfgSta.h"
+#include "wniCfg.h"
 #include "limTypes.h"
 #include "limUtils.h"
 #include "limSendSmeRspMessages.h"
@@ -145,7 +128,7 @@ rrmGetMgmtTxPower ( tpAniSirGlobal pMac, tpPESession pSessionEntry )
                      __func__, pMac->rrm.rrmPEContext.txMgmtPower);
       return pMac->rrm.rrmPEContext.txMgmtPower;
    }
-   
+
    return pSessionEntry->txMgmtPower;
 }
 
@@ -467,7 +450,8 @@ rrmProcessNeighborReportResponse( tpAniSirGlobal pMac,
    //Send request to SME.
    mmhMsg.type    = pSmeNeighborRpt->messageType;
    mmhMsg.bodyptr = pSmeNeighborRpt;
-   MTRACE(macTraceMsgTx(pMac, pSessionEntry->peSessionId, mmhMsg.type));
+   MTRACE(macTrace(pMac, TRACE_CODE_TX_SME_MSG, pSessionEntry->peSessionId,
+                                                           mmhMsg.type));
    status = limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
 
    return status;
@@ -556,7 +540,6 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
    tANI_U16 measDuration, maxMeasduration;
    tANI_S8  maxDuration;
    tANI_U8  sign;
-   tANI_U16 index;
 
    if( pBeaconReq->measurement_request.Beacon.BeaconReporting.present &&
        (pBeaconReq->measurement_request.Beacon.BeaconReporting.reportingCondition != 0) )
@@ -651,9 +634,12 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
    pSmeBcnReportReq->messageType = eWNI_SME_BEACON_REPORT_REQ_IND;
    pSmeBcnReportReq->length = sizeof( tSirBeaconReportReqInd );
    pSmeBcnReportReq->uDialogToken = pBeaconReq->measurement_token;
+   pSmeBcnReportReq->msgSource = eRRM_MSG_SOURCE_11K;
    pSmeBcnReportReq->randomizationInterval = SYS_TU_TO_MS (pBeaconReq->measurement_request.Beacon.randomization);
    pSmeBcnReportReq->channelInfo.regulatoryClass = pBeaconReq->measurement_request.Beacon.regClass;
    pSmeBcnReportReq->channelInfo.channelNum = pBeaconReq->measurement_request.Beacon.channel;
+   pSmeBcnReportReq->measurementDuration[0] = SYS_TU_TO_MS(measDuration);
+   pSmeBcnReportReq->fMeasurementtype[0]    = pBeaconReq->measurement_request.Beacon.meas_mode;
    vos_mem_copy(pSmeBcnReportReq->macaddrBssid, pBeaconReq->measurement_request.Beacon.BSSID,
                 sizeof(tSirMacAddr));
 
@@ -670,8 +656,7 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
    pSmeBcnReportReq->channelList.numChannels = num_channels;
    if( pBeaconReq->measurement_request.Beacon.num_APChannelReport )
    {
-     tANI_U16 index2 = 0;
-     tANI_U8 *pChanList = pSmeBcnReportReq->channelList.channelNumber;
+      tANI_U8 *pChanList = pSmeBcnReportReq->channelList.channelNumber;
       for( num_APChanReport = 0 ; num_APChanReport < pBeaconReq->measurement_request.Beacon.num_APChannelReport ; num_APChanReport++ )
       {
          vos_mem_copy(pChanList,
@@ -679,23 +664,14 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
           pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].num_channelList);
 
          pChanList += pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].num_channelList;
-         for( index = 0; index < (pBeaconReq->measurement_request.Beacon.APChannelReport[num_APChanReport].num_channelList); index++ )
-         {
-            pSmeBcnReportReq->measurementDuration[index2] = SYS_TU_TO_MS(measDuration);
-            pSmeBcnReportReq->fMeasurementtype[index2++] = pBeaconReq->measurement_request.Beacon.meas_mode;
-         }
       }
-   }
-   else
-   {
-       pSmeBcnReportReq->measurementDuration[0] = SYS_TU_TO_MS(measDuration);
-       pSmeBcnReportReq->fMeasurementtype[0] = pBeaconReq->measurement_request.Beacon.meas_mode;
    }
 
    //Send request to SME.
    mmhMsg.type    = eWNI_SME_BEACON_REPORT_REQ_IND;
    mmhMsg.bodyptr = pSmeBcnReportReq;
-   MTRACE(macTraceMsgTx(pMac, pSessionEntry->peSessionId, mmhMsg.type));
+   MTRACE(macTrace(pMac, TRACE_CODE_TX_SME_MSG, pSessionEntry->peSessionId,
+                                                           mmhMsg.type));
    return limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
 }
 
@@ -837,6 +813,7 @@ rrmProcessBeaconReportXmit( tpAniSirGlobal pMac,
 
       pReport = vos_mem_malloc(pBcnReport->numBssDesc *
                               sizeof(tSirMacRadioMeasureReport));
+
       if (NULL == pReport)
       {
          PELOGE(limLog(pMac, LOGE, FL("RRM Report is NULL, allocation failed"));)
@@ -939,6 +916,7 @@ rrmProcessBeaconReportXmit( tpAniSirGlobal pMac,
                                             pReport,
                                             pBcnReport->bssId,
                                             pSessionEntry );
+
       pCurrentReq->sendEmptyBcnRpt = false;
    }
 
