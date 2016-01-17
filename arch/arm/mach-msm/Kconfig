@@ -3061,15 +3061,15 @@ config FORCE_FAST_CHARGE
 	bool "Force AC charge mode at will"
 	default y
 	help
-		A simple sysfs interface to force adapters that
-		are detected as USB to charge as AC.
-
-endif
+	 A simple sysfs interface to force adapters that
+	 are detected as USB to charge as AC.
 
 config KERNEL_TEXT_MPU_PROT
-        bool "Enable xpu protection of kernel r/o sections"
-        help
-          Enables xpu protection of kernel code and read-only data
-          sections early in boot. Read access is permitted to
-          all masters; Write access is only permited to the
-          secure world.
+	bool "Enable xpu protection of kernel r/o sections"
+	help
+	 Enables xpu protection of kernel code and read-only data
+	 sections early in boot. Read access is permitted to
+	 all masters; Write access is only permited to the
+	 secure world.
+
+endif
