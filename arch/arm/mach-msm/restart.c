@@ -288,6 +288,9 @@ static void msm_restart_prepare(const char *cmd)
 			__raw_writel(0x6f656d00 | code, restart_reason);
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+		} else if (!strcmp(cmd, "dload")) {
+			set_dload_mode(1);
+			__raw_writel(0x77665501, restart_reason);
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
