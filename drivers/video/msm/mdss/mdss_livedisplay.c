@@ -637,11 +637,12 @@ int mdss_livedisplay_create_sysfs(struct msm_fb_data_type *mfd)
 			goto sysfs_err;
 	}
 
-	if (mlc->caps & MODE_SRE) {
-		rc = sysfs_create_file(&mfd->fbi->dev->kobj, &dev_attr_sre.attr);
-		if (rc)
-			goto sysfs_err;
-	}
+	// Some panels do not play nicely with sre let's disable sre sysfs
+	//if (mlc->caps & MODE_SRE) {
+	//	rc = sysfs_create_file(&mfd->fbi->dev->kobj, &dev_attr_sre.attr);
+	//	if (rc)
+	//		goto sysfs_err;
+	//}
 
 	if (mlc->caps & MODE_AUTO_CONTRAST) {
 		rc = sysfs_create_file(&mfd->fbi->dev->kobj, &dev_attr_aco.attr);
