@@ -419,7 +419,7 @@ void mdss_dump_reg(char __iomem *base, int len)
 		x4 = readl_relaxed(addr+0x4);
 		x8 = readl_relaxed(addr+0x8);
 		xc = readl_relaxed(addr+0xc);
-		pr_info("%p : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
+		pr_info("%pK : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
 		addr += 16;
 	}
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
